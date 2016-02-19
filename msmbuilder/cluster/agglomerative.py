@@ -12,7 +12,6 @@ import numpy as np
 import six
 import scipy.spatial.distance
 from scipy.cluster.hierarchy import fcluster
-from sklearn.externals.joblib import Memory
 from sklearn.utils import check_random_state
 from sklearn.base import ClusterMixin, TransformerMixin
 from . import MultiSequenceClusterMixin
@@ -30,10 +29,17 @@ except ImportError:
 
 __all__ = ['_LandmarkAgglomerative']
 
+def ward_pooling_function(x, cluster_cardinality, intra_cluster_sum):
+    normalization_factor = cluster_cardinality*(cluster_cardinality-1)/2
+    squared_sums = (x**2).sum(axis=1)
+    result_vector = (cluster_cardinality*squared_sums - intra_cluster_sum)/normalization_factor
+    return result_vector
+
 POOLING_FUNCTIONS = {
-    'average': lambda x: np.mean(x, axis=1),
-    'complete': lambda x: np.max(x, axis=1),
-    'single': lambda x: np.min(x, axis=1),
+    'average': lambda x,ignore1,ignore2: np.mean(x, axis=1),
+    'complete': lambda x,ignore1,ignore2: np.max(x, axis=1),
+    'single': lambda x,ignore1,ignore2: np.min(x, axis=1),
+    'ward': ward_pooling_function,
 }
 
 
@@ -90,7 +96,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         the only the landmarks, and then assign the remaining dataset based
         on distances to the landmarks. Note that n_landmarks=None is equivalent
         to using every point in the dataset as a landmark.
-    linkage : {'single', 'complete', 'average'}, default='average'
+    linkage : {'single', 'complete', 'average', 'ward'}, default='average'
         Which linkage criterion to use. The linkage criterion determines which
         distance to use between sets of observation. The algorithm will merge
         the pairs of cluster that minimize this criterion.
@@ -100,6 +106,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
               all observations of the two sets.
             - single uses the minimum distance between all observations of the
               two sets.
+            - ward linkage minimizes the within-cluster variance
         The linkage also effects the predict() method and the use of landmarks.
         After computing the distance from each new data point to the landmarks,
         the new data point will be assigned to the cluster that minimizes the
@@ -108,8 +115,6 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         the closest landmark, with ``average``, it will be assigned the label
         of the landmark s.t. the mean distance from the test point to all the
         landmarks with that label is minimized, etc.)
-    memory : Instance of joblib.Memory or string (optional)
-        Used to cache the output of the computation of the distance matrix.
     metric : string or callable, default= "euclidean"
         Metric used to compute the distance between samples.
     landmark_strategy : {'stride', 'random'}, default='stride'
@@ -133,11 +138,9 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
     """
 
     def __init__(self, n_clusters, n_landmarks=None, linkage='average',
-                 memory=Memory(cachedir=None, verbose=0), metric='euclidean',
-                 landmark_strategy='stride', random_state=None):
+                 metric='euclidean', landmark_strategy='stride', random_state=None):
         self.n_clusters = n_clusters
         self.n_landmarks = n_landmarks
-        self.memory = memory
         self.metric = metric
         self.landmark_strategy = landmark_strategy
         self.random_state = random_state
@@ -159,24 +162,41 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         self
         """
 
-        memory = self.memory
-        if isinstance(memory, six.string_types):
-            memory = Memory(cachedir=memory, verbose=0)
         if self.n_landmarks is None:
-            distances = memory.cache(pdist)(X, self.metric)
+            distances = pdist(X, self.metric)
+            tree = linkage(distances, method=self.linkage)
+            self.landmark_labels_ = fcluster(tree, criterion='maxclust', t=self.n_clusters) - 1
+            self.cardinality_ = np.bincount(self.landmark_labels_)
+            self.squared_distances_within_cluster_ = np.zeros(self.n_clusters)
+
+            n = len(X)
+            for k in range(len(distances)):
+                i = int(n - 2 - np.floor(np.sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5))
+                j = int(k + i + 1 - n*(n-1)/2 + (n-i)*((n-i)-1)/2)
+                if self.landmark_labels_[i] == self.landmark_labels_[j]:
+                    self.squared_distances_within_cluster_[self.landmark_labels_[i]] += distances[k]**2
+
+            self.landmarks_ = X
+
         else:
             if self.landmark_strategy == 'random':
                 land_indices = check_random_state(self.random_state).randint(len(X), size=self.n_landmarks)
             else:
                 land_indices = np.arange(len(X))[::(len(X) // self.n_landmarks)][:self.n_landmarks]
-            distances = memory.cache(pdist)(X[land_indices], self.metric)
 
-        tree = memory.cache(linkage)(distances, method=self.linkage)
-        self.landmark_labels_ = fcluster(tree, criterion='maxclust', t=self.n_clusters) - 1
+            distances = pdist(X[land_indices], self.metric)
+            tree = linkage(distances, method=self.linkage)
+            self.landmark_labels_ = fcluster(tree, criterion='maxclust', t=self.n_clusters) - 1
+            self.cardinality_ = np.bincount(self.landmark_labels_)
+            self.squared_distances_within_cluster_ = np.zeros(self.n_clusters)
 
-        if self.n_landmarks is None:
-            self.landmarks_ = X
-        else:
+            n = len(X[land_indices])
+            for k in range(len(distances)):
+                i = int(n - 2 - np.floor(np.sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5))
+                j = int(k + i + 1 - n*(n-1)/2 + (n-i)*((n-i)-1)/2)
+                if self.landmark_labels_[i] == self.landmark_labels_[j]:
+                    self.squared_distances_within_cluster_[self.landmark_labels_[i]] += distances[k]**2
+
             self.landmarks_ = X[land_indices]
 
         return self
@@ -208,7 +228,8 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
 
         for i in range(self.n_clusters):
             if np.any(self.landmark_labels_ == i):
-                d = pooling_func(dists[:, self.landmark_labels_ == i])
+                d = pooling_func(dists[:, self.landmark_labels_ == i], self.cardinality_[i],
+                                        self.squared_distances_within_cluster_[i])
                 mask = (d < pooled_distances)
                 pooled_distances[mask] = d[mask]
                 labels[mask] = i
