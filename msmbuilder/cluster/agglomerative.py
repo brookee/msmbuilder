@@ -11,6 +11,7 @@ from __future__ import absolute_import, print_function, division
 import numpy as np
 import six
 import scipy.spatial.distance
+import warnings
 from scipy.cluster.hierarchy import fcluster
 from sklearn.utils import check_random_state
 from sklearn.base import ClusterMixin, TransformerMixin
@@ -230,6 +231,8 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
             if np.any(self.landmark_labels_ == i):
                 d = pooling_func(dists[:, self.landmark_labels_ == i], self.cardinality_[i],
                                         self.squared_distances_within_cluster_[i])
+                if np.any(d < 0):
+                    warnings.warn('Something weird happened; distance shouldn\'t be negative.')
                 mask = (d < pooled_distances)
                 pooled_distances[mask] = d[mask]
                 labels[mask] = i
