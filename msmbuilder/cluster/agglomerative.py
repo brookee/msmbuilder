@@ -1,6 +1,6 @@
 # Author: Robert McGibbon <rmcgibbo@gmail.com>
-# Contributors:
-# Copyright (c) 2014, Stanford University
+# Contributors: Brooke Husic <brookehusic@gmail.com>
+# Copyright (c) 2016, Stanford University
 # All rights reserved.
 
 #-----------------------------------------------------------------------------
@@ -12,6 +12,7 @@ import numpy as np
 import six
 import scipy.spatial.distance
 import warnings
+from msmbuilder import libdistance
 from scipy.cluster.hierarchy import fcluster
 from sklearn.utils import check_random_state
 from sklearn.base import ClusterMixin, TransformerMixin
@@ -42,33 +43,6 @@ POOLING_FUNCTIONS = {
     'single': lambda x,ignore1,ignore2: np.min(x, axis=1),
     'ward': ward_pooling_function,
 }
-
-
-#-----------------------------------------------------------------------------
-# Utilities
-#-----------------------------------------------------------------------------
-
-
-def pdist(X, metric='euclidean'):
-    if isinstance(metric, six.string_types):
-        return scipy.spatial.distance.pdist(X, metric)
-
-    n = len(X)
-    d = np.empty((n, n))
-    for i in range(n):
-        d[i, :] = metric(X, X, i)
-    return scipy.spatial.distance.squareform(d, checks=False)
-
-
-def cdist(XA, XB, metric='euclidean'):
-    if isinstance(metric, six.string_types):
-        return scipy.spatial.distance.cdist(XA, XB, metric)
-
-    nA, nB = len(XA), len(XB)
-    d = np.empty((nA, nB))
-    for i in range(nA):
-        d[i, :] = metric(XB, XA, i)
-    return d
 
 
 #-----------------------------------------------------------------------------
@@ -149,6 +123,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
 
         self.landmark_labels_ = None
         self.landmarks_ = None
+        self.labels_ = None
 
     def fit(self, X, y=None):
         """
@@ -164,7 +139,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         """
 
         if self.n_landmarks is None:
-            distances = pdist(X, self.metric)
+            distances = libdistance.pdist(X, self.metric)
             tree = linkage(distances, method=self.linkage)
             self.landmark_labels_ = fcluster(tree, criterion='maxclust', t=self.n_clusters) - 1
             self.cardinality_ = np.bincount(self.landmark_labels_)
@@ -178,6 +153,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
                     self.squared_distances_within_cluster_[self.landmark_labels_[i]] += distances[k]**2
 
             self.landmarks_ = X
+            self.labels_ = self.landmark_labels_
 
         else:
             if self.landmark_strategy == 'random':
@@ -185,7 +161,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
             else:
                 land_indices = np.arange(len(X))[::(len(X) // self.n_landmarks)][:self.n_landmarks]
 
-            distances = pdist(X[land_indices], self.metric)
+            distances = libdistance.pdist(X[land_indices], self.metric)
             tree = linkage(distances, method=self.linkage)
             self.landmark_labels_ = fcluster(tree, criterion='maxclust', t=self.n_clusters) - 1
             self.cardinality_ = np.bincount(self.landmark_labels_)
@@ -199,6 +175,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
                     self.squared_distances_within_cluster_[self.landmark_labels_[i]] += distances[k]**2
 
             self.landmarks_ = X[land_indices]
+            self.labels_ = None
 
         return self
 
@@ -216,7 +193,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
             Index of the cluster each sample belongs to.
         """
 
-        dists = cdist(X, self.landmarks_, self.metric)
+        dists = libdistance.cdist(X, self.landmarks_, self.metric)
 
         try:
             pooling_func = POOLING_FUNCTIONS[self.linkage]
@@ -251,3 +228,4 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
 
 class LandmarkAgglomerative(MultiSequenceClusterMixin, _LandmarkAgglomerative, BaseEstimator):
     __doc__ = _LandmarkAgglomerative.__doc__
+    _allow_trajectory = True
