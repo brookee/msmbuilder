@@ -32,10 +32,14 @@ except ImportError:
 __all__ = ['_LandmarkAgglomerative']
 
 def ward_pooling_function(x, cluster_cardinality, intra_cluster_sum):
-    normalization_factor = cluster_cardinality*(cluster_cardinality-1)/2
-    squared_sums = (x**2).sum(axis=1)
-    result_vector = (cluster_cardinality*squared_sums - intra_cluster_sum)/normalization_factor
-    return result_vector
+    if cluster_cardinality == 1:
+        squared_sums = (x**2)[:,0]
+        return squared_sums
+    else:
+        normalization_factor = cluster_cardinality*(cluster_cardinality+1)/2
+        squared_sums = (x**2).sum(axis=1)
+        result_vector = (cluster_cardinality*squared_sums - intra_cluster_sum)/normalization_factor
+        return result_vector
 
 POOLING_FUNCTIONS = {
     'average': lambda x,ignore1,ignore2: np.mean(x, axis=1),
@@ -213,6 +217,8 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
                 mask = (d < pooled_distances)
                 pooled_distances[mask] = d[mask]
                 labels[mask] = i
+            else:
+                print('No data points were assigned to cluster %c' % i)
 
         return labels
 
