@@ -544,8 +544,8 @@ cdef _dist_rmsd(X, y, npy_intp[::1] X_indices=None):
 
     if X._rmsd_traces is None:
         X.center_coordinates()
-    if Y._rmsd_traces is None:
-        Y.center_coordinates()
+    if y._rmsd_traces is None:
+        y.center_coordinates()
     X_trace = X._rmsd_traces
     y_trace = y._rmsd_traces
 
