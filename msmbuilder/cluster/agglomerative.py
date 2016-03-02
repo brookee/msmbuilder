@@ -75,6 +75,11 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         the only the landmarks, and then assign the remaining dataset based
         on distances to the landmarks. Note that n_landmarks=None is equivalent
         to using every point in the dataset as a landmark.
+    max_landmarks : int, optional, default=None
+        Useful for pipeline-style cross-validation. If n_clusters exceeds
+        n_landmarks, max_landmarks will be used. Otherwise, n_clusters
+        will be used. If None then no cutoff is enforced on n_clusters,
+        which may result in memory issues.
     linkage : {'single', 'complete', 'average', 'ward'}, default='average'
         Which linkage criterion to use. The linkage criterion determines which
         distance to use between sets of observation. The algorithm will merge
@@ -116,10 +121,11 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
     landmarks_
     """
 
-    def __init__(self, n_clusters, n_landmarks=None, linkage='average',
+    def __init__(self, n_clusters, n_landmarks=None, max_landmarks=None, linkage='average',
                  metric='euclidean', landmark_strategy='stride', random_state=None):
         self.n_clusters = n_clusters
         self.n_landmarks = n_landmarks
+        self.max_landmarks = max_landmarks
         self.metric = metric
         self.landmark_strategy = landmark_strategy
         self.random_state = random_state
@@ -141,6 +147,10 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         -------
         self
         """
+
+        if self.max_landmarks is not None:
+            if self.n_clusters > self.max_landmarks:
+                self.n_landmarks = self.max_landmarks
 
         if self.n_landmarks is None:
             distances = libdistance.pdist(X, self.metric)
