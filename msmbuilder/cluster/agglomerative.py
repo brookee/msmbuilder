@@ -123,7 +123,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
 
     def __init__(self, n_clusters, n_landmarks=None, max_landmarks=None, linkage='average',
                  metric='euclidean', landmark_strategy='stride', random_state=None):
-        self.n_clusters = n_clusters
+        self.n_clusters = int(n_clusters)
         self.n_landmarks = n_landmarks
         self.max_landmarks = max_landmarks
         self.metric = metric
@@ -155,9 +155,9 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         if self.n_landmarks is None:
             distances = libdistance.pdist(X, self.metric)
             tree = linkage(distances, method=self.linkage)
-            self.landmark_labels_ = fcluster(tree, criterion='maxclust', t=self.n_clusters) - 1
+            self.landmark_labels_ = fcluster(tree, criterion='maxclust', t=int(self.n_clusters)) - 1
             self.cardinality_ = np.bincount(self.landmark_labels_)
-            self.squared_distances_within_cluster_ = np.zeros(self.n_clusters)
+            self.squared_distances_within_cluster_ = np.zeros(int(self.n_clusters))
 
             n = len(X)
             for k in range(len(distances)):
@@ -177,9 +177,9 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
 
             distances = libdistance.pdist(X[land_indices], self.metric)
             tree = linkage(distances, method=self.linkage)
-            self.landmark_labels_ = fcluster(tree, criterion='maxclust', t=self.n_clusters) - 1
+            self.landmark_labels_ = fcluster(tree, criterion='maxclust', t=int(self.n_clusters)) - 1
             self.cardinality_ = np.bincount(self.landmark_labels_)
-            self.squared_distances_within_cluster_ = np.zeros(self.n_clusters)
+            self.squared_distances_within_cluster_ = np.zeros(int(self.n_clusters))
 
             n = len(X[land_indices])
             for k in range(len(distances)):
@@ -218,7 +218,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         pooled_distances.fill(np.infty)
         labels = np.zeros(len(X), dtype=int)
 
-        for i in range(self.n_clusters):
+        for i in range(int(self.n_clusters)):
             if np.any(self.landmark_labels_ == i):
                 d = pooling_func(dists[:, self.landmark_labels_ == i], self.cardinality_[i],
                                         self.squared_distances_within_cluster_[i])
