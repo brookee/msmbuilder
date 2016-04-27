@@ -77,6 +77,7 @@ class _KCenters(ClusterMixin, TransformerMixin):
         self.random_state = random_state
 
     def fit(self, X, y=None):
+        X = X.astype('float64')
         n_samples = len(X)
         new_center_index = check_random_state(self.random_state).randint(0, n_samples)
 
@@ -115,6 +116,7 @@ class _KCenters(ClusterMixin, TransformerMixin):
         Y : array, shape [n_samples,]
             Index of the closest center each sample belongs to.
         """
+        X = X.astype('float64')
         labels, inertia = libdistance.assign_nearest(
             X, self.cluster_centers_, metric=self.metric)
         return labels

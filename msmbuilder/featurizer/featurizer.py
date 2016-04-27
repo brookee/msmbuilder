@@ -886,11 +886,12 @@ class ContactFeaturizer(Featurizer):
         carbon).
     """
 
-    def __init__(self, contacts='all', scheme='closest-heavy', ignore_nonprotein=True):
+    def __init__(self, contacts='all', scheme='closest-heavy', ignore_nonprotein=True, binary_cutoff=None, k=None):
         self.contacts = contacts
         self.scheme = scheme
         self.ignore_nonprotein = ignore_nonprotein
-
+        self.binary_cutoff = binary_cutoff
+        self.k = k
 
     def partial_transform(self, traj):
         """Featurize an MD trajectory into a vector space via of residue-residue
@@ -913,8 +914,13 @@ class ContactFeaturizer(Featurizer):
         --------
         transform : simultaneously featurize a collection of MD trajectories
         """
-        distances, _ = md.compute_contacts(traj, self.contacts,
-                                           self.scheme, self.ignore_nonprotein)
+        distances, _ = md.compute_contacts(traj, self.contacts, self.scheme, self.ignore_nonprotein)
+        
+        if self.binary_cutoff is not None:
+            if self.k is None:
+                distances = (distances < self.binary_cutoff)
+            else:
+                distances = 1.0/(1+np.exp(self.k*(distances-self.binary_cutoff)))
         return distances
 
 
