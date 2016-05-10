@@ -122,7 +122,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
     """
 
     def __init__(self, n_clusters, n_landmarks=None, max_landmarks=None, linkage='average',
-                 metric='euclidean', landmark_strategy='stride', random_state=None):
+                 metric='euclidean', landmark_strategy='stride', random_state=None, ward_cv='ward'):
         self.n_clusters = int(n_clusters)
         self.n_landmarks = n_landmarks
         self.max_landmarks = max_landmarks
@@ -134,6 +134,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         self.landmark_labels_ = None
         self.landmarks_ = None
         self.labels_ = None
+	self.ward_cv = ward_cv
 
     def fit(self, X, y=None):
         """
@@ -209,10 +210,13 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
 
         dists = libdistance.cdist(X, self.landmarks_, self.metric)
 
-        try:
-            pooling_func = POOLING_FUNCTIONS[self.linkage]
-        except KeyError:
-            raise ValueError('linkage=%s is not supported' % self.linkage)
+	if self.linkage == 'ward':
+	    pooling_func = POOLING_FUNCTIONS[self.ward_cv]
+        else:
+	    try:
+                pooling_func = POOLING_FUNCTIONS[self.linkage]
+            except KeyError:
+                raise ValueError('linkage=%s is not supported' % self.linkage)
 
         pooled_distances = np.empty(len(X))
         pooled_distances.fill(np.infty)

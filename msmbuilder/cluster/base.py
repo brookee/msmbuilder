@@ -47,7 +47,8 @@ class MultiSequenceClusterMixin(object):
         check_iter_of_sequences(sequences, allow_trajectory=self._allow_trajectory)
         super(MultiSequenceClusterMixin, self).fit(self._concat(sequences))
 
-        if hasattr(self, 'labels_'):
+        # if hasattr(self, 'labels_'):
+        if self.labels_ is not None:
             self.labels_ = self._split(self.labels_)
 
         return self

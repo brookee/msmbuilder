@@ -88,7 +88,8 @@ class _MiniBatchKMedoids(ClusterMixin, TransformerMixin):
         self.random_state = random_state
 
     def fit(self, X, y=None):
-        X = X.astype('float64')
+        if self.metric != 'rmsd':
+            X = X.astype('float64')
         n_samples = len(X)
         n_batches = int(np.ceil(float(n_samples) / self.batch_size))
         n_iter = int(self.max_iter * n_batches)
@@ -157,7 +158,8 @@ class _MiniBatchKMedoids(ClusterMixin, TransformerMixin):
         Y : array, shape [n_samples,]
             Index of the closest center each sample belongs to.
         """
-        X = X.astype('float64')
+        if self.metric != 'rmsd':
+            X = X.astype('float64')
         labels, inertia = libdistance.assign_nearest(
             X, self.cluster_centers_, metric=self.metric)
         return labels
