@@ -997,6 +997,18 @@ class SASAFeaturizer(Featurizer):
     def partial_transform(self, traj):
         return md.shrake_rupley(traj, mode=self.mode, **self.kwargs)
 
+class DSSPFeaturizer(Featurizer):
+    def __init__(self):
+        pass
+
+    def partial_transform(self, traj):
+        dssp = md.compute_dssp(traj)
+        h = np.sum(dssp == 'H', axis=1)
+        e = np.sum(dssp == 'E', axis=1)
+        c = np.sum(dssp == 'C', axis=1)
+        result = np.transpose([(h-e)/(h+e+c)])
+
+        return result
 
 class ContactFeaturizer(Featurizer):
     """Featurizer based on residue-residue distances.
