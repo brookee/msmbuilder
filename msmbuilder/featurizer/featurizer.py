@@ -1007,11 +1007,11 @@ class DSSPFeaturizer(Featurizer):
         e = np.sum(dssp == 'E', axis=1)
         c = np.sum(dssp == 'C', axis=1)
 
-        if option=='helix':
+        if self.option=='helix':
             result = np.transpose([h/(h+e+c)])
-        elif option=='sheet':
+        elif self.option=='sheet':
             result = np.transpose([e/(h+e+c)])
-        elif option=='all':
+        elif self.option=='all':
             result = np.transpose([h/(h+e+c), e/(h+e+c), c/(h+e+c)])
 
         else:
