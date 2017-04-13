@@ -997,8 +997,8 @@ class SASAFeaturizer(Featurizer):
     def partial_transform(self, traj):
         return md.shrake_rupley(traj, mode=self.mode, **self.kwargs)
 
-class DSSPFeaturizer(Featurizer, option='default'):
-    def __init__(self, option):
+class DSSPFeaturizer(Featurizer):
+    def __init__(self, option='default'):
         self.option = option
 
     def partial_transform(self, traj):
