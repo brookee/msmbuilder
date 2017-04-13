@@ -997,16 +997,25 @@ class SASAFeaturizer(Featurizer):
     def partial_transform(self, traj):
         return md.shrake_rupley(traj, mode=self.mode, **self.kwargs)
 
-class DSSPFeaturizer(Featurizer):
-    def __init__(self):
-        pass
+class DSSPFeaturizer(Featurizer, option='default'):
+    def __init__(self, option):
+        self.option = option
 
     def partial_transform(self, traj):
         dssp = md.compute_dssp(traj)
         h = np.sum(dssp == 'H', axis=1)
         e = np.sum(dssp == 'E', axis=1)
         c = np.sum(dssp == 'C', axis=1)
-        result = np.transpose([(h-e)/(h+e+c)])
+
+        if option='helix':
+            result = np.transpose([h/(h+e+c)])
+        elif option='sheet':
+            result = np.transpose([e/(h+e+c)])
+        elif option='all':
+            result = np.transpose([h/(h+e+c), e/(h+e+c), c/(h+e+c)])
+
+        else:
+            result = np.transpose([(h-e)/(h+e+c)])
 
         return result
 
