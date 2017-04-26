@@ -990,12 +990,17 @@ class SASAFeaturizer(Featurizer):
     mdtraj.shrake_rupley
     """
 
-    def __init__(self, mode='residue', **kwargs):
+    def __init__(self, mode='residue', total=True, **kwargs):
         self.mode = mode
+        self.total = total
         self.kwargs = kwargs
 
     def partial_transform(self, traj):
-        return md.shrake_rupley(traj, mode=self.mode, **self.kwargs)
+        result = md.shrake_rupley(traj, mode=self.mode, **self.kwargs)
+        if not self.total:
+            return result
+        else:
+            return np.sum(result,axis=1)
 
 class DSSPFeaturizer(Featurizer):
     def __init__(self, option='default'):
