@@ -1000,7 +1000,7 @@ class SASAFeaturizer(Featurizer):
         if self.scheme == 'all':
             return result
         elif self.scheme == 'term':
-            return np.append(result[0],result[-1])
+            return np.array([y[0], y[-1]] for y in result)
         elif self.scheme == 'total':
             return np.sum(result,axis=1)
         else:
