@@ -72,6 +72,7 @@ class BACE(MarkovStateModel):
         return self
 
     def _distance_helper(self, w_i, w_j, c_i, c_j):
+        print(w_i, w_j)
         p_i = c_i/w_i
         p_j = c_j/w_j
         cp = (c_i + c_j) / (w_i + w_j)
@@ -86,8 +87,8 @@ class BACE(MarkovStateModel):
                 return np.inf, None
  
         cmat += self.pseudocount
-        
-        w = np.sum(cmat, axis=1)            
+        w = np.sum(cmat, axis=1)
+
         w_i = w[i]
         w_j = w[j]
         c_i = cmat[i]
@@ -98,31 +99,45 @@ class BACE(MarkovStateModel):
         return d, w
 
     def _get_initial_pdist(self):
-        n = len(self.cmat_)
-        d = np.empty((n,n))
-        w_list = []
+        d = np.full((self.n_states_, self.n_states_), np.inf)
+        w_list = np.full((self.n_states_, self.n_states_), None)
         
-        for i in range(n):
-            for j in range(i+1,n):
+#         n = len(self.cmat_)
+#         d = np.empty((n,n))
+         #w_list = []
+        
+        for i in range(self.n_states_):
+            for j in range(i+1,self.n_states_):
                 dist, weights = self._get_bayes_factor(i, j)
                 d[i, j] = dist
-                w_list.append(weights)
+                #w_list.append(weights)
+                w_list[i, j] = weights
+        
+        return d, w_list
 
-        return (scipy.spatial.distance.squareform(d, checks=False),
-                np.array(w_list))
+#         return (scipy.spatial.distance.squareform(d, checks=False),
+#                 np.array(w_list))
 
     def _get_pair(self, pdist_out, n):
         pdist_vec, weights = pdist_out
+        #print(pdist_vec)
+        #print("get pair weights: ", weights)
         min_bf = np.min(pdist_vec)
+        #print(min_bf)
         self.bayes_factors_.append((int(n-1), min_bf))  
         
-        k = np.where(pdist_vec == min_bf)[0][0]
-        i = np.triu_indices(n,k=1)[0][k]
-        j = np.triu_indices(n,k=1)[1][k]
+        i, j = np.where(pdist_vec == min_bf)
+        i = i[0]
+        j = j[0]
+#         print(k, self.n_states_)
+#         i = np.triu_indices(self.n_states_,k=1)[0][k]
+#         j = np.triu_indices(self.n_states_,k=1)[1][k]
+#         i = int(n - 2 - int(sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5))
+#         j = int(k + i + 1 - n*(n-1)/2 + (n-i)*((n-i)-1)/2)
 
         self.microstate_mapping_[i] = np.min((i,j))
         self.microstate_mapping_[j] = np.min((i,j))
-        return (i, j, weights[k])
+        return (i, j, weights[i,j])
 
     def _merge_states(self, pair_out, cmat_orig):
         cmat = np.copy(cmat_orig)
@@ -134,6 +149,7 @@ class BACE(MarkovStateModel):
         
         i = np.min(pair)
         j = np.max(pair)
+        #print('pair out: ', i, j)
         w[i] += w[j]
         w[j] = 0
         self.removed_.append(j)
@@ -159,12 +175,18 @@ class BACE(MarkovStateModel):
         return cmat, w, i, j
 
     def _get_i_and_j(self, w, i, j, ii, jj, cmat):
+        print('~~hello from get i and j~~')
         if ii in [i, j]:
             if w[i] > w[j]:
                 my_i = i
             else:
                 my_i = j
+            print('my i is: ', my_i)
             w_i = w[my_i]
+            
+            if w[jj] == 0:
+                jj = self.microstate_mapping_[jj]
+
             w_j = w[jj]
             c_i = cmat[my_i]
             c_j = cmat[jj]
@@ -174,21 +196,31 @@ class BACE(MarkovStateModel):
                 my_j = i
             else:
                 my_j = j
-            w_i = w[ii]
+            print('my j is: ', my_j)
+            
+            if w[ii] == 0:
+                ii = self.microstate_mapping_[ii]
+                print("ii switched to ", ii, " !")
+
+            w_i = w[ii]    
+            print("w_i is ", w_i, " from index ii = ", ii)
             w_j = w[my_j]
+            print("w_j is ", w_j)
             c_i = cmat[ii]
             c_j = cmat[my_j]
             
-        return w_i, w_j, c_i, c_j
+        return w_i, w_j, c_i, c_j, ii, jj
 
     def _update_helper(self, w, i, j, ii, jj, cmat):
-        w_i, w_j, c_i, c_j = self._get_i_and_j(w, i, j, ii, jj, cmat)
+        #print(w)
+        w_i, w_j, c_i, c_j, ii, jj = self._get_i_and_j(w, i, j, ii, jj, cmat)
 
         for del_ind in sorted(np.where(w == 0)[0])[::-1]:
             c_i = np.delete(c_i,del_ind)
             c_j = np.delete(c_j,del_ind)
 
-        return self._distance_helper(w_i, w_j, c_i, c_j)
+        d = self._distance_helper(w_i, w_j, c_i, c_j)
+        return d, ii, jj
 
     def _update_pdists(self, merge_output, pdist_output):
         cmat = np.copy(merge_output[0])
@@ -198,26 +230,48 @@ class BACE(MarkovStateModel):
         
         new_pdist = pdist_output[0]
         new_pdist_weights = pdist_output[1]
-        for pw in new_pdist_weights:
-            if pw is not None:
-                pw[i] += pw[j]
-                pw[j] = 0
+#         print(new_pdist)
+#         print(new_pdist_weights)
+        for row in new_pdist_weights:
+            for pw in row:
+                if pw is not None:
+                    pw[i] += pw[j]
+                    pw[j] = 0
             
         n = cmat.shape[0]
+        #print(cmat)
+        
+        print(new_pdist)
+        
         for ii in range(n):
             for jj in range(ii+1,n):
                 if (ii in [i, j] and jj not in [i, j]) or (
                     jj in [i, j] and ii not in [i, j]):              
-                    k = int((n*(n-1)/2) - (n-ii)*((n-ii)-1)/2 + jj - ii - 1)
-                    if new_pdist[k] != np.inf:
-                        new_pdist[k] = self._update_helper(weights, i, j, ii, jj, cmat)
-                        new_pdist_weights[k] = weights
+                    #k = int((n*(n-1)/2) - (n-ii)*((n-ii)-1)/2 + jj - ii - 1)
+                    if new_pdist[ii, jj] != np.inf:
+                        print('weights: ', weights)
+                        print("now that ", i, j, " have been merged,")
+                        print("need to update the distance between ", ii, jj)
+                        d, new_ii, new_jj = self._update_helper(weights, i, j, ii, jj, cmat)
+                        
+                        if (new_ii, new_jj) != (ii, jj):
+                            new_pdist[ii, jj] = np.inf
+                            new_pdist_weights[ii, jj] = None
+                            ii = new_ii
+                            jj = new_jj
+                        
+                        new_pdist[ii, jj] = d
+                        print("MY NEW PDIST: ", new_pdist[ii,jj])
+                        new_pdist_weights[ii, jj] = weights
         
         # set bf between merged clusters to inf
-        k = int((n*(n-1)/2) - (n-i)*((n-i)-1)/2 + j - i - 1)
-        new_pdist[k] = np.inf
-        new_pdist_weights[k] = None
+#         k = int((n*(n-1)/2) - (n-i)*((n-i)-1)/2 + j - i - 1)
+#         new_pdist[k] = np.inf
+#         new_pdist_weights[k] = None
+        new_pdist[i, j] = np.inf
+        new_pdist_weights[i, j] = None
 
+        #print(new_pdist)
         return new_pdist, new_pdist_weights
 
     def _fix_mapping(self):
@@ -252,6 +306,8 @@ class BACE(MarkovStateModel):
             self.microstate_mapping_[i] = i
 
         pdist_output = self._get_initial_pdist()
+        #print(pdist_output)
+        #print(pdist_output[0])
         cmat = self.cmat_
         n_macro = self.n_states_
         pair_output = self._get_pair(pdist_output, n_macro)
@@ -260,9 +316,16 @@ class BACE(MarkovStateModel):
         n_macro = self.bayes_factors_[-1][0]        
 
         while n_macro > self.n_macrostates:
+            #print(pdist_output[0])
+            print(n_macro)
             pair_output = self._get_pair(pdist_output, n_macro)
+            print('pair_output')
             merge = self._merge_states(pair_output, merge[0])
+            print('merge')
             pdist_output = self._update_pdists(merge, pdist_output)
+            print('pdist_output')
+            print(self.microstate_mapping_)
+            print(self.removed_)
             n_macro = self.bayes_factors_[-1][0]
         
         self.microstate_mapping_ = self._fix_mapping()
