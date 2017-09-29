@@ -23,6 +23,10 @@ def manual_kl_divergence(P, Q, scalar=True):
                 temp += entry * np.log(entry / Q[row][i])
         vec.append(temp)
     result = np.array(vec)
+    for i, r in enumerate(result):
+        if r < 0:
+            if np.allclose(r, 0, rtol=1e-08, atol=1e-11):
+                result[i] = 0
     if scalar:
         return np.sum(result)
     else:
