@@ -148,7 +148,8 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
 
     def __init__(self, n_clusters, n_landmarks=None, linkage='average',
                  metric='euclidean', landmark_strategy='stride',
-                 random_state=None, max_landmarks=None, ward_predictor='ward'):
+                 random_state=None, max_landmarks=None, ward_predictor='ward',
+                 pdist_mat=None):
         self.n_clusters = n_clusters
         self.n_landmarks = n_landmarks
         self.metric = metric
@@ -157,6 +158,7 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         self.linkage = linkage
         self.max_landmarks = max_landmarks
         self.ward_predictor = ward_predictor
+        self.pdist_mat = pdist_mat
 
         self.landmark_labels_ = None
         self.landmarks_ = None
@@ -180,7 +182,13 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
                 self.n_landmarks = self.max_landmarks
         
         if self.n_landmarks is None:
-            distances = pdist(X, self.metric)
+            if self.pdist_mat is None:
+                distances = pdist(X, self.metric)
+                self.pdist_mat = distances
+
+            else:
+                distances = self.get_adj_mat(dim=1)
+
             tree = linkage(distances, method=self.linkage)
             self.landmark_labels_ = fcluster(tree, criterion='maxclust',
                                              t=self.n_clusters) - 1
@@ -280,6 +288,22 @@ class _LandmarkAgglomerative(ClusterMixin, TransformerMixin):
         """
         self.fit(X)
         return self.predict(X)
+
+    def get_adj_mat(self, dim=1):
+        A = np.array(self.pdist_mat)
+
+        if len(A.shape) not in [1, 2]:
+            raise RuntimeError('Pdist matrix must be square or linear')
+
+        if dim == 1:
+            if len(A.shape) == 2:
+                A = scipy.spatial.distance.squareform(A)
+            return A
+
+        elif dim == 2:
+            if len(A.shape) == 1:
+                A = scipy.spatial.distance.squareform(A)
+            return A
 
 
 class LandmarkAgglomerative(MultiSequenceClusterMixin, _LandmarkAgglomerative,

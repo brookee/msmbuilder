@@ -88,13 +88,15 @@ class CSC(MarkovStateModel):
     """
     def __init__(self, n_macrostates, linkage='average',
                  eig=0, metric=js_metric_array, fit_only=False,
-                 n_landmarks=None, landmark_strategy='stride',
+                 adjacency_mat=None, n_landmarks=None,
+                 landmark_strategy='stride',
                  random_state=None, **kwargs):
         self.n_macrostates = n_macrostates
         self.linkage = linkage
         self.eig = eig
         self.metric = metric
         self.fit_only = fit_only
+        self.adjacency_mat = adjacency_mat
         self.n_landmarks = n_landmarks
         self.landmark_strategy = landmark_strategy
         self.random_state = random_state
@@ -126,17 +128,22 @@ class CSC(MarkovStateModel):
     def _do_lumping(self):
         """Do the CSC lumping.
         """
-        if self._CSC_fullset is None:
+        if self.adjacency_mat is None:
             A = scipy.spatial.distance.squareform(
                         pdist(self.transmat_, metric=self.metric))
-            Adegree = np.sum(A, axis=1)
-            DD = np.diag(Adegree)
-            L = DD - A 
-            eigval, eigvec = scipy.linalg.eig(L, DD)
-            lambdaindex = np.argsort(eigval)[::-1]
-            sortedeigs = eigval[lambdaindex]
-            CSC_fullset = eigvec[:, lambdaindex]
-            self._CSC_fullset = CSC_fullset
+            self.adjacency_mat = A
+
+        else:
+            A = self.get_adj_mat(dim=2)
+
+        Adegree = np.sum(A, axis=1)
+        DD = np.diag(Adegree)
+        L = DD - A 
+        eigval, eigvec = scipy.linalg.eig(L, DD)
+        lambdaindex = np.argsort(eigval)[::-1]
+        sortedeigs = eigval[lambdaindex]
+        CSC_fullset = eigvec[:, lambdaindex]
+        self._CSC_fullset = CSC_fullset
 
         process = np.array([[i] for i in self._CSC_fullset[:,self.eig]])
 
@@ -173,11 +180,28 @@ class CSC(MarkovStateModel):
         else:
             raise ValueError
 
+    def get_adj_mat(self, dim=1):
+        A = np.array(self.adjacency_mat)
+
+        if len(A.shape) not in [1, 2]:
+            raise RuntimeError('Adjacency matrix must be square or linear')
+
+        if dim == 1:
+            if len(A.shape) == 2:
+                A = scipy.spatial.distance.squareform(A)
+            return A
+
+        elif dim == 2:
+            if len(A.shape) == 1:
+                A = scipy.spatial.distance.squareform(A)
+            return A
+
     @classmethod
     def from_msm(cls, msm, n_macrostates, linkage='average', eig=0,
                  metric=js_metric_array, fit_only=False,
-                 n_landmarks=None, landmark_strategy='stride',
-                 random_state=None, get_linkage=False):
+                 adjacency_mat=None, n_landmarks=None,
+                 landmark_strategy='stride', random_state=None,
+                 get_linkage=False):
         """Create and fit lumped model from pre-existing MSM.
 
         Parameters
@@ -210,8 +234,8 @@ class CSC(MarkovStateModel):
         """
         params = msm.get_params()
         lumper = cls(n_macrostates, linkage=linkage, eig=eig, metric=metric,
-                 fit_only=fit_only, n_landmarks=n_landmarks,
-                 landmark_strategy=landmark_strategy,
+                 fit_only=fit_only, adjacency_mat=adjacency_mat,
+                 n_landmarks=n_landmarks, landmark_strategy=landmark_strategy,
                  random_state=random_state, **params)
 
         lumper.transmat_ = msm.transmat_
@@ -224,7 +248,14 @@ class CSC(MarkovStateModel):
             lumper._do_lumping()
 
         if get_linkage:
-            p = pdist(msm.transmat_, metric=metric)
+            if lumper.adjacency_mat is None:
+                p = pdist(msm.transmat_, metric=metric)
+                lumper.adjacency_mat = p
+
+            else:
+                p = lumper.get_adj_mat(dim=1)
+
+            #p = pdist(msm.transmat_, metric=metric)
             l = scipy.cluster.hierarchy.linkage(p, linkage)
 
             lumper.pairwise_dists = p

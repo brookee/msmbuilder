@@ -66,11 +66,12 @@ class MVCA(MarkovStateModel):
     """
 
     def __init__(self, n_macrostates, metric=js_metric_array, fit_only=False,
-                 n_landmarks=None, landmark_strategy='stride',
+                 pdist_mat=None, n_landmarks=None, landmark_strategy='stride',
                  random_state=None, **kwargs):
         self.n_macrostates = n_macrostates
         self.metric = metric
         self.fit_only = fit_only
+        self.pdist_mat = None
         self.n_landmarks = n_landmarks
         self.landmark_strategy = landmark_strategy
         self.random_state = random_state
@@ -106,7 +107,8 @@ class MVCA(MarkovStateModel):
                                       metric=self.metric,
                                       n_landmarks=self.n_landmarks,
                                       landmark_strategy=self.landmark_strategy,
-                                      random_state=self.random_state)
+                                      random_state=self.random_state,
+                                      pdist_mat=self.pdist_mat)
         model.fit([self.transmat_])
 
         if self.fit_only:
@@ -135,10 +137,27 @@ class MVCA(MarkovStateModel):
         else:
             raise ValueError
 
+    def get_adj_mat(self, dim=1):
+        A = np.array(self.pdist_mat)
+
+        if len(A.shape) not in [1, 2]:
+            raise RuntimeError('Pdist matrix must be square or linear')
+
+        if dim == 1:
+            if len(A.shape) == 2:
+                A = scipy.spatial.distance.squareform(A)
+            return A
+
+        elif dim == 2:
+            if len(A.shape) == 1:
+                A = scipy.spatial.distance.squareform(A)
+            return A
+
     @classmethod
     def from_msm(cls, msm, n_macrostates, metric=js_metric_array, 
-                 n_landmarks=None, landmark_strategy='stride',
-                 random_state=None, get_linkage=False, fit_only=False):
+                 fit_only=False, pdist_mat=None, n_landmarks=None,
+                 landmark_strategy='stride', random_state=None,
+                 get_linkage=False):
         """Create and fit lumped model from pre-existing MSM.
 
         Parameters
@@ -171,7 +190,8 @@ class MVCA(MarkovStateModel):
         """
         params = msm.get_params()
         lumper = cls(n_macrostates, metric=metric, fit_only=fit_only,
-                 n_landmarks=n_landmarks, landmark_strategy=landmark_strategy,
+                 pdist_mat=pdist_mat, n_landmarks=n_landmarks,
+                 landmark_strategy=landmark_strategy,
                  random_state=random_state, **params)
 
         lumper.transmat_ = msm.transmat_
@@ -184,7 +204,15 @@ class MVCA(MarkovStateModel):
             lumper._do_lumping()
 
         if get_linkage:
-            p = pdist(msm.transmat_, metric=metric)
+            if pdist_mat is None:
+                p = pdist(msm.transmat_, metric=metric)
+                lumper.pdist_mat = p
+
+            else:
+                lumper.pdist_mat = pdist_mat
+                p = lumper.get_adj_mat(dim=1)
+
+            #p = pdist(msm.transmat_, metric=metric)
             l = scipy.cluster.hierarchy.linkage(p, 'ward')
 
             lumper.pairwise_dists = p
