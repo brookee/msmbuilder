@@ -142,6 +142,7 @@ class CSC(MarkovStateModel):
         eigval, eigvec = scipy.linalg.eig(L, DD)
         lambdaindex = np.argsort(eigval)[::-1]
         sortedeigs = eigval[lambdaindex]
+        self._sortedeigs = sortedeigs
         CSC_fullset = eigvec[:, lambdaindex]
         self._CSC_fullset = CSC_fullset
 
