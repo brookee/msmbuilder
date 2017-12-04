@@ -1066,13 +1066,43 @@ class SASAFeaturizer(Featurizer):
     mdtraj.shrake_rupley
     """
 
-    def __init__(self, mode='residue', **kwargs):
+    def __init__(self, mode='residue', scheme='total', **kwargs):
         self.mode = mode
+        self.scheme = scheme
         self.kwargs = kwargs
 
     def partial_transform(self, traj):
-        return md.shrake_rupley(traj, mode=self.mode, **self.kwargs)
+        result = md.shrake_rupley(traj, mode=self.mode, **self.kwargs)
+        if self.scheme == 'all':
+            return result
+        elif self.scheme == 'term':
+            return np.array([y[0], y[-1]] for y in result)
+        elif self.scheme == 'total':
+            return np.sum(result,axis=1)
+        else:
+            raise RuntimeError('bad scheme')
 
+class DSSPFeaturizer(Featurizer):
+    def __init__(self, option='default'):
+        self.option = option
+
+    def partial_transform(self, traj):
+        dssp = md.compute_dssp(traj)
+        h = np.sum(dssp == 'H', axis=1)
+        e = np.sum(dssp == 'E', axis=1)
+        c = np.sum(dssp == 'C', axis=1)
+
+        if self.option=='helix':
+            result = np.transpose([h/(h+e+c)])
+        elif self.option=='sheet':
+            result = np.transpose([e/(h+e+c)])
+        elif self.option=='all':
+            result = np.transpose([h/(h+e+c), e/(h+e+c), c/(h+e+c)])
+
+        else:
+            result = np.transpose([(h-e)/(h+e+c)])
+
+        return result
 
 class ContactFeaturizer(Featurizer):
     """Featurizer based on residue-residue distances.
