@@ -131,6 +131,7 @@ class CSC(MarkovStateModel):
         if self.adjacency_mat is None:
             A = scipy.spatial.distance.squareform(
                         pdist(self.transmat_, metric=self.metric))
+            assert len(A.shape) == 2
             self.adjacency_mat = A
 
         else:
@@ -181,7 +182,7 @@ class CSC(MarkovStateModel):
         else:
             raise ValueError
 
-    def get_adj_mat(self, dim=1):
+    def get_adj_mat(self, dim=2):
         A = np.array(self.adjacency_mat)
 
         if len(A.shape) not in [1, 2]:
@@ -201,8 +202,7 @@ class CSC(MarkovStateModel):
     def from_msm(cls, msm, n_macrostates, linkage='average', eig=0,
                  metric=js_metric_array, fit_only=False,
                  adjacency_mat=None, n_landmarks=None,
-                 landmark_strategy='stride', random_state=None,
-                 get_linkage=False):
+                 landmark_strategy='stride', random_state=None):
         """Create and fit lumped model from pre-existing MSM.
 
         Parameters
@@ -211,27 +211,11 @@ class CSC(MarkovStateModel):
             The input microstate msm to use.
         n_macrostates : int
             The number of macrostates
-        get_linkage : boolean, default=False
-            Whether to return linkage and elbow data objects. Warning:
-            This will compute n choose 2 pairwise distances
 
         Returns
         -------
         lumper : cls
             The fit CSC object.
-        pairwise_dists : if get_linkage is True, np.array,
-                         [number of microstates choose 2]
-        linkage : if get_linkage is True, scipy linkage object
-        elbow_data : if get_linkage is True, np.array,
-                     [number of microstates - 1]. Change in updated Ward
-                     objective function, indexed by n_macrostates - 1
-
-        Example
-        -------
-        plt.figure()
-        scipy.cluster.hierarchy.dendrogram(mvca.linkage)
-
-        scatter(arange(1,n_microstates), mvca.elbow_data)
         """
         params = msm.get_params()
         lumper = cls(n_macrostates, linkage=linkage, eig=eig, metric=metric,
@@ -247,26 +231,6 @@ class CSC(MarkovStateModel):
 
         if n_macrostates is not None:
             lumper._do_lumping()
-
-        if get_linkage:
-            if lumper.adjacency_mat is None:
-                p = pdist(msm.transmat_, metric=metric)
-                lumper.adjacency_mat = p
-
-            else:
-                p = lumper.get_adj_mat(dim=1)
-
-            #p = pdist(msm.transmat_, metric=metric)
-            l = scipy.cluster.hierarchy.linkage(p, linkage)
-
-            lumper.pairwise_dists = p
-            lumper.linkage = l
-            lumper.elbow_data = l[:, 2][::-1]
-
-        else:
-            lumper.pairwise_dists = None
-            lumper.linkage = None
-            lumper.elbow_data = None
 
         return lumper
 
